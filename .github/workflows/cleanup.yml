@@ -2,7 +2,7 @@ name: IPCAM cleanup
 
 on:
   schedule:
-    - cron: "0 3 1 * *"
+  - cron: "0 3 * * *"   # каждый день в 03:00 UTC (06:00 по Киеву)
   workflow_dispatch:
     inputs:
       dry_run:
