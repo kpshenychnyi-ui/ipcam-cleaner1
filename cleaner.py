@@ -37,17 +37,23 @@ def human(n):
         n /= 1024
 
 
+def log(*a):
+    print(f"[{time.strftime('%H:%M:%S')}]", *a, flush=True)
+
+
 def connect():
     """FTPS, если сервер умеет; иначе обычный FTP (auto)."""
     if TLS_MODE in ("auto", "yes"):
         try:
+            log(f"Подключаюсь к {HOST} по FTPS...")
             f = FTP_TLS(timeout=60)
             f.connect(HOST, PORT)
             f.login(USER, PASS)
             f.prot_p()
             f.set_pasv(True)
             return f, True
-        except Exception:
+        except Exception as e:
+            log(f"FTPS не удалось ({e}), пробую обычный FTP")
             if TLS_MODE == "yes":
                 raise
     f = FTP(timeout=60)
@@ -104,6 +110,8 @@ class Stats:
 def clean(ftp, path, st, deleted_rows, errors):
     """Рекурсивно чистит path. Возвращает True, если папка стала пустой."""
     entries = listdir(ftp, path)
+    st.dirs_scanned = getattr(st, "dirs_scanned", 0) + 1
+    log(f"{path}: {len(entries)} объектов (всего старых: {st.del_n}, свежих: {st.keep_n})")
     remaining = 0
     for name, is_dir, size, mtime in entries:
         p = f"{path}/{name}"
@@ -172,10 +180,12 @@ def main():
         sys.exit("Нужны FTP_HOST, FTP_USER, FTP_PASS")
     t0 = time.time()
     ftp, is_tls = connect()
+    log(f"Подключено ({'FTPS' if is_tls else 'FTP'})")
     cams = sorted(n for n, is_dir, _, _ in listdir(ftp, "") or listdir(ftp, "/")
                   if is_dir and n.startswith(PREFIX))
     if not cams:
         raise RuntimeError(f"Не найдено папок с префиксом {PREFIX} — ничего не трогаю.")
+    log("Камеры:", ", ".join(cams))
 
     per_cam, deleted_rows, errors = {}, [], []
     for cam in cams:
