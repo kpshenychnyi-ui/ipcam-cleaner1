@@ -12,7 +12,7 @@ IPCAM cleaner: удаляет с FTP снимки старше MAX_AGE_DAYS и �
   QUOTA_GB        — размер тарифа в ГБ, чтобы посчитать свободное место (необязательно)
   TG_BOT_TOKEN, TG_CHAT_ID — куда слать отчёт
 """
-import csv, io, json, os, sys, time, traceback, uuid, urllib.request
+import csv, io, json, os, ssl, sys, time, traceback, uuid, urllib.request
 from datetime import datetime, timedelta, timezone
 from ftplib import FTP, FTP_TLS, error_perm
 
@@ -46,7 +46,10 @@ def connect():
     if TLS_MODE in ("auto", "yes"):
         try:
             log(f"Подключаюсь к {HOST} по FTPS...")
-            f = FTP_TLS(timeout=60)
+            # у TheHost старый DH-ключ (1024 бит) — разрешаем его, иначе FTPS не поднимается
+            ctx = ssl.create_default_context()
+            ctx.set_ciphers("DEFAULT:@SECLEVEL=1")
+            f = FTP_TLS(timeout=60, context=ctx)
             f.connect(HOST, PORT)
             f.login(USER, PASS)
             f.prot_p()
@@ -111,7 +114,8 @@ def clean(ftp, path, st, deleted_rows, errors):
     """Рекурсивно чистит path. Возвращает True, если папка стала пустой."""
     entries = listdir(ftp, path)
     st.dirs_scanned = getattr(st, "dirs_scanned", 0) + 1
-    log(f"{path}: {len(entries)} объектов (всего старых: {st.del_n}, свежих: {st.keep_n})")
+    if "/" not in path or st.dirs_scanned % 25 == 0:
+        log(f"{path}: просканировано папок {st.dirs_scanned}, старых {st.del_n}, свежих {st.keep_n}")
     remaining = 0
     for name, is_dir, size, mtime in entries:
         p = f"{path}/{name}"
